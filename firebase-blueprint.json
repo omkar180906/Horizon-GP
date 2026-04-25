@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "CivicIssue": {
+      "title": "Civic Issue",
+      "description": "Records representing geolocated civic problems.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["backlog", "in-progress", "resolved", "archived"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "category": { "type": "string", "enum": ["infrastructure", "sanitation", "safety", "greenery"] },
+        "votes": { "type": "integer", "default": 0 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status", "priority", "category", "lat", "lng", "votes"]
+    }
+  },
+  "firestore": {
+    "issues": {
+      "schema": "CivicIssue",
+      "description": "Collection of all civic issues."
+    }
+  }
+}

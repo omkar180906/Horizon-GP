@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint for CivicIssue
+    function isValidCivicIssue(data) {
+      return data.keys().hasAll(['title', 'status', 'priority', 'category', 'authorId', 'updatedAt', 'votes'])
+        && data.title is string && data.title.size() <= 200
+        && (data.get('description', '') is string)
+        && data.status in ['backlog', 'in-progress', 'resolved', 'archived']
+        && data.priority in ['low', 'medium', 'high']
+        && data.category in ['infrastructure', 'sanitation', 'safety', 'greenery']
+        && data.votes is int
+        && (data.get('lat', 0) is number || data.get('x', 0) is number)
+        && (data.get('lng', 0) is number || data.get('y', 0) is number)
+        && (data.get('imageUrl', '') is string)
+        && data.authorId == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    match /issues/{issueId} {
+      allow get: if isSignedIn();
+      allow list: if isVerified();
+      
+      allow create: if isVerified() 
+        && isValidId(issueId)
+        && isValidCivicIssue(incoming());
+
+      allow update: if isVerified()
+        && (
+          // Action: Upvote logic (only allow votes field to change)
+          (incoming().diff(existing()).affectedKeys().hasOnly(['votes', 'updatedAt']) && (incoming().votes == (existing().get('votes', 0) + 1)))
+          ||
+          // Action: Admin/Owner status or category update
+          (isValidCivicIssue(incoming()) && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'votes'])
+            || (existing().authorId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAll(['updatedAt']))
+          ))
+        );
+
+      allow delete: if isVerified() && existing().authorId == request.auth.uid;
+    }
+  }
+}
